@@ -1,3 +1,5 @@
+![Function Explorer screenshot](images/S.png)
+
 # Function Explorer
 
 An interactive single-page tool for exploring common mathematical functions and how the parameters `a`, `b`, `c`, `d` in `a · f(b·x + c) + d` reshape their graphs.
@@ -11,13 +13,11 @@ An interactive single-page tool for exploring common mathematical functions and 
 - **Properties card** — domain, range, parity, asymptotes, derivative, and short notes for each function.
 - **Pan / zoom / autoscale** via the Plotly modebar (appears in the top-right corner on hover).
 
-## Usage
+## Live demo
 
-Open `function_explorer.html` in any modern browser. No build step, no dependencies to install — Plotly and Tailwind are loaded from CDN.
+The app is hosted on GitHub Pages: **https://vladislavbro.github.io/function-explorer/**
 
-```
-open function_explorer.html
-```
+No build step, no dependencies to install — Plotly and Tailwind are loaded from CDN.
 
 ### Controls
 
