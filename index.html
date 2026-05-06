@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Function Explorer</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .func-btn { transition: all 0.15s; }
+  .func-btn:hover { background: #e5e7eb; }
+  .func-btn.active { background: #3b82f6; color: white; }
+  .func-btn.active:hover { background: #2563eb; }
+  .cat-header { font-size: 0.7rem; letter-spacing: 0.05em; }
+  input[type="range"] { accent-color: #3b82f6; }
+  .formula { font-family: "Cambria Math", "Latin Modern Math", Georgia, serif; }
+  .scroll-thin::-webkit-scrollbar { width: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  .tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; border-radius: 6px; background: #f1f5f9; font-size: 13px; cursor: pointer; transition: all 0.15s; border: 1.5px solid transparent; }
+  .tab:hover { background: #e2e8f0; }
+  .tab.active { background: white; border-color: #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .tab .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tab .close { color: #94a3b8; padding: 0 2px; border-radius: 3px; }
+  .tab .close:hover { background: #cbd5e1; color: #475569; }
+  .modebar-container { right: 16px !important; top: 12px !important; }
+  .modebar { background: transparent !important; border-radius: 6px; padding: 2px 4px; transition: background 0.15s; }
+  #plot:hover .modebar { background: rgba(255,255,255,0.7) !important; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<div class="flex h-screen">
+  <!-- Sidebar -->
+  <aside class="w-72 bg-white border-r border-slate-200 overflow-y-auto scroll-thin">
+    <div class="p-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+      <h1 class="font-bold text-lg">Functions</h1>
+      <p class="text-xs text-slate-500 mt-1">Click to select. Shift+click to overlay.</p>
+      <button id="clearBtn" class="mt-2 text-xs text-blue-600 hover:underline">Clear</button>
+    </div>
+    <div id="funcList" class="p-2"></div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+    <!-- Formula banner -->
+    <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-col gap-1.5 flex-shrink-0">
+      <div id="tabsRow" class="flex flex-wrap gap-1.5"></div>
+      <div id="formulaBase" class="text-xs text-slate-500 formula">—</div>
+      <div id="formulaCurrent" class="text-lg text-slate-900 formula font-medium">Pick a function from the left</div>
+    </div>
+
+    <!-- Plot -->
+    <div id="plot" class="flex-1 min-h-0"></div>
+
+    <!-- Bottom panel -->
+    <div class="border-t border-slate-200 bg-white p-4 pb-6 max-h-[60vh] overflow-y-auto scroll-thin flex-shrink-0">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Params -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold text-sm">Parameters: <span class="formula text-slate-600">a · f(b·x + c) + d</span></h2>
+            <button id="resetParams" class="text-xs text-blue-600 hover:underline">Reset</button>
+          </div>
+          <div id="params" class="space-y-2"></div>
+        </div>
+
+        <!-- Info card -->
+        <div id="infoCard" class="bg-slate-50 rounded-lg p-3 text-sm self-start">
+          <p class="text-slate-500 italic">Pick a function from the left to see its properties.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ============== Function catalog ==============
+const FUNCS = {
+  poly: {
+    label: "Polynomial",
+    items: [
+      { id: "linear", name: "x", formula: "f(x) = x", base: x => x,
+        domain: "ℝ", range: "ℝ", parity: "odd", asymp: "—",
+        deriv: "f'(x) = 1", notes: "Basic line. Slope = a·b." },
+      { id: "quad", name: "x²", formula: "f(x) = x²", base: x => x*x,
+        domain: "ℝ", range: "[0, ∞)", parity: "even", asymp: "—",
+        deriv: "f'(x) = 2x", notes: "Parabola. Minimum at 0. MSE loss in ML." },
+      { id: "cubic", name: "x³", formula: "f(x) = x³", base: x => x*x*x,
+        domain: "ℝ", range: "ℝ", parity: "odd", asymp: "—",
+        deriv: "f'(x) = 3x²", notes: "Inflection point at 0." },
+      { id: "quartic", name: "x⁴", formula: "f(x) = x⁴", base: x => x**4,
+        domain: "ℝ", range: "[0, ∞)", parity: "even", asymp: "—",
+        deriv: "f'(x) = 4x³", notes: "Grows faster than x²." },
+      { id: "sqrt", name: "√x", formula: "f(x) = √x", base: x => x >= 0 ? Math.sqrt(x) : NaN,
+        domain: "[0, ∞)", range: "[0, ∞)", parity: "—", asymp: "—",
+        deriv: "f'(x) = 1/(2√x)", notes: "Undefined for x<0. Derivative tends to ∞ at 0." },
+      { id: "cbrt", name: "∛x", formula: "f(x) = ∛x", base: x => Math.cbrt(x),
+        domain: "ℝ", range: "ℝ", parity: "odd", asymp: "—",
+        deriv: "f'(x) = 1/(3·x^(2/3))", notes: "Defined everywhere, unlike √x." },
+      { id: "recip", name: "1/x", formula: "f(x) = 1/x", base: x => x !== 0 ? 1/x : NaN,
+        domain: "ℝ \\ {0}", range: "ℝ \\ {0}", parity: "odd", asymp: "x=0, y=0",
+        deriv: "f'(x) = -1/x²", notes: "Hyperbola. Vertical and horizontal asymptotes." },
+      { id: "recip2", name: "1/x²", formula: "f(x) = 1/x²", base: x => x !== 0 ? 1/(x*x) : NaN,
+        domain: "ℝ \\ {0}", range: "(0, ∞)", parity: "even", asymp: "x=0, y=0",
+        deriv: "f'(x) = -2/x³", notes: "Always positive. Symmetric about the y-axis." },
+    ]
+  },
+  exp: {
+    label: "Exponential & Logarithm",
+    items: [
+      { id: "exp", name: "eˣ", formula: "f(x) = eˣ", base: x => Math.exp(x),
+        domain: "ℝ", range: "(0, ∞)", parity: "—", asymp: "y=0 (as x→-∞)",
+        deriv: "f'(x) = eˣ", notes: "f' = f. Foundation for softmax and the normal distribution." },
+      { id: "exp2", name: "2ˣ", formula: "f(x) = 2ˣ", base: x => Math.pow(2, x),
+        domain: "ℝ", range: "(0, ∞)", parity: "—", asymp: "y=0",
+        deriv: "f'(x) = 2ˣ · ln(2)", notes: "Grows slower than eˣ." },
+      { id: "expneg", name: "e⁻ˣ", formula: "f(x) = e⁻ˣ", base: x => Math.exp(-x),
+        domain: "ℝ", range: "(0, ∞)", parity: "—", asymp: "y=0 (as x→+∞)",
+        deriv: "f'(x) = -e⁻ˣ", notes: "Mirror of eˣ. Basis for decay and Poisson processes." },
+      { id: "ln", name: "ln(x)", formula: "f(x) = ln(x)", base: x => x > 0 ? Math.log(x) : NaN,
+        domain: "(0, ∞)", range: "ℝ", parity: "—", asymp: "x=0",
+        deriv: "f'(x) = 1/x", notes: "Inverse of eˣ. Log-likelihood in ML." },
+      { id: "log2", name: "log₂(x)", formula: "f(x) = log₂(x)", base: x => x > 0 ? Math.log2(x) : NaN,
+        domain: "(0, ∞)", range: "ℝ", parity: "—", asymp: "x=0",
+        deriv: "f'(x) = 1/(x·ln2)", notes: "Entropy in bits." },
+      { id: "log10", name: "log₁₀(x)", formula: "f(x) = log₁₀(x)", base: x => x > 0 ? Math.log10(x) : NaN,
+        domain: "(0, ∞)", range: "ℝ", parity: "—", asymp: "x=0",
+        deriv: "f'(x) = 1/(x·ln10)", notes: "Common log. Decibel and pH scales." },
+      { id: "gauss", name: "e^(-x²)", formula: "f(x) = e^(-x²)", base: x => Math.exp(-x*x),
+        domain: "ℝ", range: "(0, 1]", parity: "even", asymp: "y=0",
+        deriv: "f'(x) = -2x·e^(-x²)", notes: "Gaussian. Basis of the normal distribution and RBF kernels." },
+    ]
+  },
+  trig: {
+    label: "Trigonometry",
+    items: [
+      { id: "sin", name: "sin(x)", formula: "f(x) = sin(x)", base: x => Math.sin(x),
+        domain: "ℝ", range: "[-1, 1]", parity: "odd", asymp: "—",
+        deriv: "f'(x) = cos(x)", notes: "Period 2π. Fourier series, signals." },
+      { id: "cos", name: "cos(x)", formula: "f(x) = cos(x)", base: x => Math.cos(x),
+        domain: "ℝ", range: "[-1, 1]", parity: "even", asymp: "—",
+        deriv: "f'(x) = -sin(x)", notes: "sin shifted by π/2." },
+      { id: "tan", name: "tan(x)", formula: "f(x) = tan(x)", base: x => {
+          const c = Math.cos(x); return Math.abs(c) < 1e-10 ? NaN : Math.sin(x)/c;
+        },
+        domain: "x ≠ π/2 + πk", range: "ℝ", parity: "odd", asymp: "x = π/2 + πk",
+        deriv: "f'(x) = 1/cos²(x)", notes: "Period π. Vertical asymptotes." },
+      { id: "cot", name: "cot(x)", formula: "f(x) = cot(x)", base: x => {
+          const s = Math.sin(x); return Math.abs(s) < 1e-10 ? NaN : Math.cos(x)/s;
+        },
+        domain: "x ≠ πk", range: "ℝ", parity: "odd", asymp: "x = πk",
+        deriv: "f'(x) = -1/sin²(x)", notes: "Period π." },
+      { id: "asin", name: "arcsin(x)", formula: "f(x) = arcsin(x)", base: x => Math.abs(x) <= 1 ? Math.asin(x) : NaN,
+        domain: "[-1, 1]", range: "[-π/2, π/2]", parity: "odd", asymp: "—",
+        deriv: "f'(x) = 1/√(1-x²)", notes: "Inverse of sin on the principal branch." },
+      { id: "acos", name: "arccos(x)", formula: "f(x) = arccos(x)", base: x => Math.abs(x) <= 1 ? Math.acos(x) : NaN,
+        domain: "[-1, 1]", range: "[0, π]", parity: "—", asymp: "—",
+        deriv: "f'(x) = -1/√(1-x²)", notes: "Used in cosine similarity." },
+      { id: "atan", name: "arctan(x)", formula: "f(x) = arctan(x)", base: x => Math.atan(x),
+        domain: "ℝ", range: "(-π/2, π/2)", parity: "odd", asymp: "y=±π/2",
+        deriv: "f'(x) = 1/(1+x²)", notes: "Smooth S-shape, sometimes used as an activation." },
+    ]
+  },
+  hyper: {
+    label: "Hyperbolic",
+    items: [
+      { id: "sinh", name: "sinh(x)", formula: "f(x) = (eˣ-e⁻ˣ)/2", base: x => Math.sinh(x),
+        domain: "ℝ", range: "ℝ", parity: "odd", asymp: "—",
+        deriv: "f'(x) = cosh(x)", notes: "Hyperbolic sine." },
+      { id: "cosh", name: "cosh(x)", formula: "f(x) = (eˣ+e⁻ˣ)/2", base: x => Math.cosh(x),
+        domain: "ℝ", range: "[1, ∞)", parity: "even", asymp: "—",
+        deriv: "f'(x) = sinh(x)", notes: "Catenary (shape of a hanging cable)." },
+      { id: "tanh", name: "tanh(x)", formula: "f(x) = sinh/cosh", base: x => Math.tanh(x),
+        domain: "ℝ", range: "(-1, 1)", parity: "odd", asymp: "y=±1",
+        deriv: "f'(x) = 1 - tanh²(x)", notes: "Activation in RNN/LSTM. Centered at 0." },
+    ]
+  },
+  piece: {
+    label: "Piecewise & Special",
+    items: [
+      { id: "abs", name: "|x|", formula: "f(x) = |x|", base: x => Math.abs(x),
+        domain: "ℝ", range: "[0, ∞)", parity: "even", asymp: "—",
+        deriv: "f'(x) = sign(x), x≠0", notes: "L1 norm, MAE loss. Not differentiable at 0." },
+      { id: "sign", name: "sign(x)", formula: "f(x) = sign(x)", base: x => Math.sign(x),
+        domain: "ℝ", range: "{-1, 0, 1}", parity: "odd", asymp: "—",
+        deriv: "f'(x) = 0, x≠0", notes: "Discontinuous at 0. Derivative of |x|." },
+      { id: "floor", name: "⌊x⌋", formula: "f(x) = ⌊x⌋", base: x => Math.floor(x),
+        domain: "ℝ", range: "ℤ", parity: "—", asymp: "—",
+        deriv: "f'(x) = 0 a.e.", notes: "Round down. Step function." },
+      { id: "step", name: "Heaviside H(x)", formula: "H(x) = {0, x<0; 1, x≥0}", base: x => x >= 0 ? 1 : 0,
+        domain: "ℝ", range: "{0, 1}", parity: "—", asymp: "—",
+        deriv: "δ(x) (distrib.)", notes: "Step. Idealization of \"switching on\"." },
+    ]
+  },
+  ml: {
+    label: "ML Activations",
+    items: [
+      { id: "sigmoid", name: "σ(x) sigmoid", formula: "σ(x) = 1/(1+e⁻ˣ)", base: x => 1/(1+Math.exp(-x)),
+        domain: "ℝ", range: "(0, 1)", parity: "—", asymp: "y=0, y=1",
+        deriv: "σ'(x) = σ(x)(1-σ(x))", notes: "Logistic regression, binary classification. Vanishing gradient on the tails." },
+      { id: "relu", name: "ReLU", formula: "ReLU(x) = max(0, x)", base: x => Math.max(0, x),
+        domain: "ℝ", range: "[0, ∞)", parity: "—", asymp: "—",
+        deriv: "f' = 1 if x>0, else 0", notes: "Standard in CNN/MLP. Simple, but suffers from \"dead neurons\"." },
+      { id: "lrelu", name: "Leaky ReLU", formula: "max(0.1x, x)", base: x => x >= 0 ? x : 0.1*x,
+        domain: "ℝ", range: "ℝ", parity: "—", asymp: "—",
+        deriv: "1 if x>0, else 0.1", notes: "Fixes the dead-neuron problem. Leak is usually 0.01–0.1." },
+      { id: "softplus", name: "softplus", formula: "ln(1+eˣ)", base: x => Math.log(1+Math.exp(x)),
+        domain: "ℝ", range: "(0, ∞)", parity: "—", asymp: "y=0; y=x",
+        deriv: "f'(x) = σ(x)", notes: "Smooth approximation of ReLU." },
+      { id: "swish", name: "Swish / SiLU", formula: "x · σ(x)", base: x => x/(1+Math.exp(-x)),
+        domain: "ℝ", range: "≈[-0.28, ∞)", parity: "—", asymp: "y=0 as x→-∞",
+        deriv: "σ(x) + x·σ(x)(1-σ(x))", notes: "Used in EfficientNet, GPT. Smooth, non-monotonic." },
+      { id: "gelu", name: "GELU", formula: "x · Φ(x)", base: x => 0.5*x*(1+Math.tanh(Math.sqrt(2/Math.PI)*(x+0.044715*x*x*x))),
+        domain: "ℝ", range: "≈[-0.17, ∞)", parity: "—", asymp: "y=0 as x→-∞",
+        deriv: "complex", notes: "Standard in transformers (BERT, GPT). Approximation of x·Φ(x)." },
+      { id: "elu", name: "ELU", formula: "x if x>0; α(eˣ-1) otherwise", base: x => x >= 0 ? x : (Math.exp(x)-1),
+        domain: "ℝ", range: "(-1, ∞)", parity: "—", asymp: "y=-1 as x→-∞",
+        deriv: "1 or eˣ", notes: "Smooth negative side, centers activations." },
+    ]
+  }
+};
+
+// ============== State ==============
+// selected: array of {id, params: {a,b,c,d}}
+// activeIdx: index of the function currently being edited
+let selected = [];
+let activeIdx = -1;
+const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+const defaultParams = () => ({ a: 1, b: 1, c: 0, d: 0 });
+
+function activeEntry() { return activeIdx >= 0 ? selected[activeIdx] : null; }
+function activeParams() {
+  const e = activeEntry();
+  return e ? e.params : defaultParams();
+}
+
+function findFunc(id) {
+  for (const cat of Object.values(FUNCS)) {
+    const f = cat.items.find(i => i.id === id);
+    if (f) return f;
+  }
+  return null;
+}
+
+// ============== Sidebar ==============
+function renderSidebar() {
+  const list = document.getElementById('funcList');
+  list.innerHTML = '';
+  for (const [key, cat] of Object.entries(FUNCS)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mb-3';
+    wrap.innerHTML = `<div class="cat-header uppercase font-bold text-slate-400 px-2 py-1">${cat.label}</div>`;
+    for (const f of cat.items) {
+      const btn = document.createElement('button');
+      btn.className = 'func-btn w-full text-left px-3 py-1.5 rounded text-sm formula';
+      btn.textContent = f.name;
+      btn.dataset.id = f.id;
+      btn.addEventListener('click', e => toggleFunc(f.id, e.shiftKey));
+      wrap.appendChild(btn);
+    }
+    list.appendChild(wrap);
+  }
+}
+
+function toggleFunc(id, additive) {
+  const existingIdx = selected.findIndex(s => s.id === id);
+  if (additive) {
+    if (existingIdx >= 0) {
+      selected.splice(existingIdx, 1);
+      if (activeIdx === existingIdx) activeIdx = selected.length > 0 ? 0 : -1;
+      else if (activeIdx > existingIdx) activeIdx--;
+    } else {
+      selected.push({ id, params: defaultParams() });
+      activeIdx = selected.length - 1;
+    }
+  } else {
+    if (existingIdx >= 0 && selected.length === 1) {
+      selected = []; activeIdx = -1;
+    } else {
+      selected = [{ id, params: defaultParams() }];
+      activeIdx = 0;
+    }
+  }
+  updateActiveButtons();
+  renderTabs();
+  renderParams();
+  redraw();
+  renderInfoCard();
+  updateFormulaBanner();
+}
+
+function setActive(idx) {
+  if (idx < 0 || idx >= selected.length) return;
+  activeIdx = idx;
+  renderTabs();
+  renderParams();
+  updateFormulaBanner();
+  renderInfoCard();
+}
+
+function removeAt(idx) {
+  selected.splice(idx, 1);
+  if (selected.length === 0) activeIdx = -1;
+  else if (activeIdx >= selected.length) activeIdx = selected.length - 1;
+  else if (activeIdx > idx) activeIdx--;
+  updateActiveButtons();
+  renderTabs();
+  renderParams();
+  redraw();
+  renderInfoCard();
+  updateFormulaBanner();
+}
+
+function updateActiveButtons() {
+  const ids = selected.map(s => s.id);
+  document.querySelectorAll('.func-btn').forEach(btn => {
+    btn.classList.toggle('active', ids.includes(btn.dataset.id));
+  });
+}
+
+function renderTabs() {
+  const row = document.getElementById('tabsRow');
+  row.innerHTML = '';
+  if (selected.length <= 1) { row.style.display = 'none'; return; }
+  row.style.display = 'flex';
+  selected.forEach((s, i) => {
+    const f = findFunc(s.id);
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (i === activeIdx ? ' active' : '');
+    tab.innerHTML = `
+      <span class="dot" style="background:${colors[i % colors.length]}"></span>
+      <span class="formula">${f.name}</span>
+      <button class="close" data-close="${i}">×</button>
+    `;
+    tab.addEventListener('click', e => {
+      if (e.target.dataset.close !== undefined) {
+        e.stopPropagation();
+        removeAt(parseInt(e.target.dataset.close));
+      } else {
+        setActive(i);
+      }
+    });
+    row.appendChild(tab);
+  });
+}
+
+// ============== Parameters ==============
+function renderParams() {
+  const cfg = [
+    { key: 'a', label: 'a (y-scale)', min: -5, max: 5, step: 0.1 },
+    { key: 'b', label: 'b (x-scale)', min: -5, max: 5, step: 0.1 },
+    { key: 'c', label: 'c (x-shift)', min: -10, max: 10, step: 0.1 },
+    { key: 'd', label: 'd (y-shift)', min: -10, max: 10, step: 0.1 }
+  ];
+  const cont = document.getElementById('params');
+  cont.innerHTML = '';
+  const entry = activeEntry();
+  const p = entry ? entry.params : defaultParams();
+  for (const cfgItem of cfg) {
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 text-sm';
+    row.innerHTML = `
+      <label class="w-36 text-xs">${cfgItem.label}</label>
+      <input type="range" min="${cfgItem.min}" max="${cfgItem.max}" step="${cfgItem.step}" value="${p[cfgItem.key]}" data-key="${cfgItem.key}" class="flex-1" ${entry ? '' : 'disabled'}>
+      <input type="number" step="${cfgItem.step}" value="${p[cfgItem.key]}" data-key="${cfgItem.key}" class="w-20 border rounded px-2 py-0.5 text-xs" ${entry ? '' : 'disabled'}>
+    `;
+    cont.appendChild(row);
+  }
+  cont.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const k = e.target.dataset.key;
+      const v = parseFloat(e.target.value);
+      const ent = activeEntry();
+      if (!isNaN(v) && ent) {
+        ent.params[k] = v;
+        cont.querySelectorAll(`input[data-key="${k}"]`).forEach(i => { if (i !== e.target) i.value = v; });
+        redraw();
+        updateFormulaBanner();
+      }
+    });
+  });
+}
+
+document.getElementById('resetParams').addEventListener('click', () => {
+  const entry = activeEntry();
+  if (!entry) return;
+  entry.params = defaultParams();
+  renderParams();
+  redraw();
+  updateFormulaBanner();
+});
+
+// ============== Plot ==============
+const SAMPLE_MIN = -25, SAMPLE_MAX = 25;
+function computeTrace(funcDef, p, color, N=1500) {
+  const xs = [], ys = [];
+  let prevY = null;
+  for (let i = 0; i <= N; i++) {
+    const x = SAMPLE_MIN + (SAMPLE_MAX - SAMPLE_MIN) * i / N;
+    const u = p.b * x + p.c;
+    let y;
+    try {
+      const fy = funcDef.base(u);
+      y = isNaN(fy) || !isFinite(fy) ? NaN : p.a * fy + p.d;
+    } catch { y = NaN; }
+    if (prevY !== null && isFinite(y) && isFinite(prevY)) {
+      if (Math.abs(y - prevY) > 50) { xs.push(null); ys.push(null); }
+    }
+    xs.push(x);
+    ys.push(isFinite(y) ? y : null);
+    prevY = isFinite(y) ? y : null;
+  }
+  return {
+    x: xs, y: ys, mode: 'lines', type: 'scatter',
+    name: funcDef.name,
+    line: { color, width: 2.5 },
+    hovertemplate: '%{x:.3f}, %{y:.3f}<extra>'+funcDef.name+'</extra>'
+  };
+}
+
+function redraw() {
+  const traces = selected.map((s, i) => {
+    const f = findFunc(s.id);
+    return f ? computeTrace(f, s.params, colors[i % colors.length]) : null;
+  }).filter(Boolean);
+
+  const plotEl = document.getElementById('plot');
+  const prev = plotEl.layout;
+  const xRange = prev && prev.xaxis && prev.xaxis.range ? prev.xaxis.range.slice() : [-10, 10];
+  const yRange = prev && prev.yaxis && prev.yaxis.range ? prev.yaxis.range.slice() : [-5, 5];
+
+  const layout = {
+    margin: { l: 50, r: 20, t: 20, b: 40 },
+    xaxis: { range: xRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5, gridcolor: '#e2e8f0' },
+    yaxis: { range: yRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5, gridcolor: '#e2e8f0' },
+    showlegend: traces.length > 0,
+    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#cbd5e1', borderwidth: 1 },
+    plot_bgcolor: '#fafafa',
+    paper_bgcolor: 'white',
+    hovermode: 'closest',
+    dragmode: 'pan'
+  };
+  Plotly.react('plot', traces, layout, { responsive: true, displaylogo: false });
+}
+
+// ============== Current-formula banner ==============
+function fmtNum(n) {
+  if (Number.isInteger(n)) return String(n);
+  return parseFloat(n.toFixed(2)).toString();
+}
+
+function buildCurrentFormula(f, p) {
+  const a = p.a, b = p.b, c = p.c, d = p.d;
+  const fname = f.name;
+
+  // Argument: b·x + c
+  let arg;
+  if (b === 1 && c === 0) arg = "x";
+  else if (b === 1) arg = (c >= 0 ? `x + ${fmtNum(c)}` : `x − ${fmtNum(-c)}`);
+  else if (b === -1 && c === 0) arg = "−x";
+  else if (c === 0) arg = `${fmtNum(b)}x`;
+  else arg = `${fmtNum(b)}x ${c >= 0 ? "+ " + fmtNum(c) : "− " + fmtNum(-c)}`;
+
+  // Substitute the argument into the function name
+  let inner;
+  if (fname === "x") inner = arg;
+  else if (fname === "x²") inner = `(${arg})²`;
+  else if (fname === "x³") inner = `(${arg})³`;
+  else if (fname === "x⁴") inner = `(${arg})⁴`;
+  else if (fname === "√x") inner = `√(${arg})`;
+  else if (fname === "∛x") inner = `∛(${arg})`;
+  else if (fname === "1/x") inner = `1/(${arg})`;
+  else if (fname === "1/x²") inner = `1/(${arg})²`;
+  else if (fname === "|x|") inner = `|${arg}|`;
+  else if (fname === "eˣ") inner = `e^(${arg})`;
+  else if (fname === "2ˣ") inner = `2^(${arg})`;
+  else if (fname === "e⁻ˣ") inner = `e^(−(${arg}))`;
+  else if (fname === "e^(-x²)") inner = `e^(−(${arg})²)`;
+  else if (fname === "⌊x⌋") inner = `⌊${arg}⌋`;
+  else if (fname === "Heaviside H(x)") inner = `H(${arg})`;
+  else if (fname === "σ(x) sigmoid") inner = `σ(${arg})`;
+  else if (fname.includes("(x)")) inner = fname.replace("(x)", `(${arg})`);
+  else inner = `${fname}(${arg})`;
+
+  // Coefficient a
+  let prefix;
+  if (a === 1) prefix = "";
+  else if (a === -1) prefix = "−";
+  else prefix = `${fmtNum(a)}·`;
+
+  // Shift d
+  let suffix;
+  if (d === 0) suffix = "";
+  else if (d > 0) suffix = ` + ${fmtNum(d)}`;
+  else suffix = ` − ${fmtNum(-d)}`;
+
+  return `f(x) = ${prefix}${inner}${suffix}`;
+}
+
+function updateFormulaBanner() {
+  const baseEl = document.getElementById('formulaBase');
+  const curEl = document.getElementById('formulaCurrent');
+
+  if (selected.length === 0) {
+    baseEl.textContent = '—';
+    curEl.textContent = 'Pick a function from the left';
+    return;
+  }
+  const entry = activeEntry();
+  const f = findFunc(entry.id);
+  baseEl.textContent = `Base: ${f.formula}`;
+  curEl.textContent = buildCurrentFormula(f, entry.params);
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  selected = [];
+  activeIdx = -1;
+  updateActiveButtons();
+  renderTabs();
+  renderParams();
+  redraw();
+  renderInfoCard();
+  updateFormulaBanner();
+});
+
+// ============== Info card ==============
+function renderInfoCard() {
+  const card = document.getElementById('infoCard');
+  if (selected.length === 0) {
+    card.innerHTML = '<p class="text-slate-500 italic">Pick a function from the left to see its properties.</p>';
+    return;
+  }
+  const entry = activeEntry();
+  card.innerHTML = buildInfoHTML(findFunc(entry.id));
+}
+
+function buildInfoHTML(f) {
+  return `
+    <div class="space-y-1.5">
+      <div class="font-semibold formula" style="font-size:1rem;line-height:1.4">${f.name}</div>
+      <div class="formula text-slate-700" style="font-size:0.875rem">${f.formula}</div>
+      <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-2" style="font-size:0.75rem">
+        <div><span class="text-slate-500">Domain:</span> <span class="formula">${f.domain}</span></div>
+        <div><span class="text-slate-500">Range:</span> <span class="formula">${f.range}</span></div>
+        <div><span class="text-slate-500">Parity:</span> ${f.parity}</div>
+        <div><span class="text-slate-500">Asymptotes:</span> <span class="formula">${f.asymp}</span></div>
+        <div class="col-span-2"><span class="text-slate-500">Derivative:</span> <span class="formula">${f.deriv}</span></div>
+      </div>
+      <div class="text-slate-600 mt-2 pt-2 border-t border-slate-200" style="font-size:0.75rem">${f.notes}</div>
+    </div>
+  `;
+}
+
+// ============== Init ==============
+renderSidebar();
+renderParams();
+renderTabs();
+toggleFunc('linear', false);
+
+// Resize Plotly when the container size changes
+const plotEl = document.getElementById('plot');
+const resizeObs = new ResizeObserver(() => {
+  if (window.Plotly) Plotly.Plots.resize(plotEl);
+});
+resizeObs.observe(plotEl);
+</script>
+
+</body>
+</html>
