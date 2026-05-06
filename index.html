@@ -431,8 +431,12 @@ function redraw() {
 
   const layout = {
     margin: { l: 50, r: 20, t: 20, b: 40 },
-    xaxis: { range: xRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5, gridcolor: '#e2e8f0' },
-    yaxis: { range: yRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5, gridcolor: '#e2e8f0' },
+    xaxis: { range: xRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5,
+             gridcolor: '#cbd5e1', dtick: 1, ticks: 'outside', tickcolor: '#94a3b8', ticklen: 4,
+             minor: { dtick: 0.5, gridcolor: '#eef2f7', showgrid: true } },
+    yaxis: { range: yRange, zeroline: true, zerolinecolor: '#94a3b8', zerolinewidth: 1.5,
+             gridcolor: '#cbd5e1', dtick: 1, ticks: 'outside', tickcolor: '#94a3b8', ticklen: 4,
+             minor: { dtick: 0.5, gridcolor: '#eef2f7', showgrid: true } },
     showlegend: traces.length > 0,
     legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#cbd5e1', borderwidth: 1 },
     plot_bgcolor: '#fafafa',
