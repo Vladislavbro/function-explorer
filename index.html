@@ -43,17 +43,16 @@
   <!-- Main -->
   <main class="flex-1 flex flex-col overflow-hidden">
     <!-- Formula banner -->
-    <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-4 flex-shrink-0">
-      <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-        <div id="tabsRow" class="flex flex-wrap gap-1.5"></div>
-        <div id="formulaBase" class="text-xs text-slate-500 formula">—</div>
-        <div id="formulaCurrent" class="text-lg text-slate-900 formula font-medium truncate">Pick a function from the left</div>
-      </div>
-      <div class="flex items-center gap-2 text-sm flex-shrink-0 border-l border-slate-200 pl-4">
-        <span class="formula text-slate-600">f(</span>
-        <input id="calcX" type="number" step="0.1" value="1" class="w-20 border rounded px-2 py-1 text-sm formula">
-        <span class="formula text-slate-600">) =</span>
-        <span id="calcY" class="formula font-semibold text-slate-900 w-24 truncate">1</span>
+    <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-col gap-3 flex-shrink-0">
+      <div id="tabsRow" class="flex flex-wrap gap-1.5"></div>
+      <div class="flex flex-wrap items-baseline gap-x-8 gap-y-1">
+        <div id="formulaCurrent" class="text-lg text-slate-900 formula font-medium">Pick a function from the left</div>
+        <div class="flex items-baseline gap-2 text-lg formula text-slate-900 border-l border-slate-200 pl-6 self-stretch">
+          <span>f(</span>
+          <input id="calcX" type="number" step="0.1" value="1" class="w-20 border rounded px-2 py-0.5 text-base formula self-center">
+          <span>) =</span>
+          <span id="calcY" class="font-semibold">1</span>
+        </div>
       </div>
     </div>
 
@@ -510,18 +509,15 @@ function buildCurrentFormula(f, p) {
 }
 
 function updateFormulaBanner() {
-  const baseEl = document.getElementById('formulaBase');
   const curEl = document.getElementById('formulaCurrent');
 
   if (selected.length === 0) {
-    baseEl.textContent = '—';
     curEl.textContent = 'Pick a function from the left';
     updateCalc();
     return;
   }
   const entry = activeEntry();
   const f = findFunc(entry.id);
-  baseEl.textContent = `Base: ${f.formula}`;
   curEl.textContent = buildCurrentFormula(f, entry.params);
   updateCalc();
 }
